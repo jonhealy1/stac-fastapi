@@ -1,11 +1,13 @@
 """Request models for the fields extension."""
 
+import warnings
+from dataclasses import dataclass
 from typing import Dict, Optional, Set
 
-import attr
+from fastapi import Query
 from pydantic import BaseModel, Field
+from typing_extensions import Annotated
 
-from stac_fastapi.types.config import Settings
 from stac_fastapi.types.search import APIRequest, str2list
 
 
@@ -39,6 +41,7 @@ class PostFieldsExtension(BaseModel):
                         field_dict[parent].add(key)
             else:
                 field_dict[field] = ...  # type:ignore
+
         return field_dict
 
     @property
@@ -49,10 +52,17 @@ class PostFieldsExtension(BaseModel):
         the included and excluded fields passed to the API
         Ref: https://pydantic-docs.helpmanual.io/usage/exporting_models/#advanced-include-and-exclude
         """
+        warnings.warn(
+            """The `PostFieldsExtension.filter_fields`
+            method is deprecated and will be removed in 3.0.""",
+            DeprecationWarning,
+            stacklevel=1,
+        )
+
         # Always include default_includes, even if they
         # exist in the exclude list.
         include = (self.include or set()) - (self.exclude or set())
-        include |= Settings.get().default_includes or set()
+        include |= set()
 
         return {
             "include": self._get_field_dict(include),
@@ -60,11 +70,16 @@ class PostFieldsExtension(BaseModel):
         }
 
 
-@attr.s
+@dataclass
 class FieldsExtensionGetRequest(APIRequest):
     """Additional fields for the GET request."""
 
-    fields: Optional[str] = attr.ib(default=None, converter=str2list)
+    fields: Annotated[Optional[str], Query()] = None
+
+    def __post_init__(self):
+        """convert attributes."""
+        if self.fields:
+            self.fields = str2list(self.fields)  # type: ignore
 
 
 class FieldsExtensionPostRequest(BaseModel):
